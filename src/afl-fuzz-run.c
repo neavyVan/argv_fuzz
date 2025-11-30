@@ -662,7 +662,7 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
       if (likely(q->exec_cksum)) {
 
         u32 i;
-
+        u32 count=0;
         for (i = 0; i < afl->fsrv.map_size; ++i) {
 
           if (unlikely(!afl->var_bytes[i]) &&
@@ -671,10 +671,11 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
             afl->var_bytes[i] = 1;
             // ignore the variable edge by setting it to fully discovered
             afl->virgin_bits[i] = 0;
-
+            count++;
           }
 
         }
+        printf("\ncount:%d\n",count);
 
         if (unlikely(!var_detected && !afl->afl_env.afl_no_warn_instability)) {
 
@@ -1470,7 +1471,6 @@ u8 __attribute__((hot)) common_fuzz_stuff(afl_state_t *afl, u8 *out_buf,
   }
 
   fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
-
   if (afl->stop_soon) { return 1; }
 
   if (fault == FSRV_RUN_TMOUT) {
@@ -1509,7 +1509,6 @@ u8 __attribute__((hot)) common_fuzz_stuff(afl_state_t *afl, u8 *out_buf,
     show_stats(afl);
 
   }
-
   return 0;
 
 }

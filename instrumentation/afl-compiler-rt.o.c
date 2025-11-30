@@ -3479,3 +3479,58 @@ uint32_t ijon_memdist(char *a, char *b, size_t len) {
 
 }
 
+// Tesseract Modified Start
+void __afl_parse_argv(int* argc, char ***argv) {
+  if (*argc < 2) {
+    fprintf(stderr, "TesseractFuzz: At least 2 arguments are needed.\n");
+    return;
+  }
+
+  FILE *raw = fopen((*argv)[1], "rb");
+  if (raw == NULL) {
+    fprintf(stderr, "TesseractFuzz: Can not open file argv[1]\n");
+    return;
+  }
+
+  const int MAXB = 2048;
+  s8 * buffer = (s8 *) malloc(sizeof(s8) * MAXB); //not going to be freed...
+  u32 i = 0;
+  
+  size_t read_bytes = fread(buffer, sizeof(s8), 2048, raw);
+  fclose(raw);
+
+  int new_argc = 0;
+
+  for (i = 0; i < read_bytes; i++) {
+    if (buffer[i] == '\0') {
+      new_argc++;
+    }
+  }
+
+  char ** new_argv = (char **) malloc(sizeof(char *) * (new_argc + 1));
+  u8 is_argv_idx = 1;
+  u32 argv_idx = 0;
+
+  for (i = 0; i < read_bytes; i++) {
+    if (is_argv_idx) {
+      new_argv[argv_idx++] = buffer + i;
+      is_argv_idx = 0;
+    } else if (buffer[i] == '\0') {
+      is_argv_idx = 1;
+    }
+  }
+
+  new_argv[new_argc] = 0;
+
+  
+  fprintf(stderr, "TesseractFuzz: Your argc: %d\n", new_argc);
+  for (int i = 0; i < new_argc; i++) {
+    fprintf(stderr, "TesseractFuzz: Your argv %d: #%s#\n", i, new_argv[i]);
+  }
+  
+
+  *argc = new_argc;
+  *argv = new_argv;
+  return;
+}
+// Tesseract Modified end

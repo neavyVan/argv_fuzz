@@ -331,10 +331,12 @@ void write_stats_file(afl_state_t *afl, u32 t_bytes, double bitmap_cvg,
   u64   cur_time = get_cur_time();
   u8    fn_tmp[PATH_MAX];
   u8    fn_final[PATH_MAX];
+
   FILE *f;
 
   snprintf(fn_tmp, PATH_MAX, "%s/.fuzzer_stats_tmp", afl->out_dir);
   snprintf(fn_final, PATH_MAX, "%s/fuzzer_stats", afl->out_dir);
+
   f = create_ffile(fn_tmp, afl->perm);
 
   if (afl->chown_needed) {
@@ -406,6 +408,7 @@ void write_stats_file(afl_state_t *afl, u32 t_bytes, double bitmap_cvg,
           "pending_total     : %u\n"
           "stability         : %0.02f%%\n"
           "bitmap_cvg        : %0.02f%%\n"
+          "real_map_size     : %llu\n"
           "saved_crashes     : %llu\n"
           "saved_hangs       : %llu\n"
           "total_tmout       : %llu\n"
@@ -429,7 +432,10 @@ void write_stats_file(afl_state_t *afl, u32 t_bytes, double bitmap_cvg,
           "afl_version       : " VERSION
           "\n"
           "target_mode       : %s%s%s%s%s%s%s%s%s%s\n"
-          "command_line      : %s\n",
+          "command_line      : %s\n"
+          "current_argv      : %s\n",
+          //Tesseract Modified Start
+          //Tesseract Modified End
           (afl->start_time /*- afl->prev_run_time*/) / 1000, cur_time / 1000,
           runtime_ms / 1000, (u32)getpid(),
           afl->queue_cycle ? (afl->queue_cycle - 1) : 0, afl->cycles_wo_finds,
@@ -446,7 +452,7 @@ void write_stats_file(afl_state_t *afl, u32 t_bytes, double bitmap_cvg,
           afl->last_avg_execs_saved, afl->queued_items, afl->queued_favored,
           afl->queued_discovered, afl->queued_imported, afl->queued_variable,
           afl->max_depth, afl->current_entry, afl->pending_favored,
-          afl->pending_not_fuzzed, stability, bitmap_cvg, afl->saved_crashes,
+          afl->pending_not_fuzzed, stability, bitmap_cvg,afl->fsrv.real_map_size, afl->saved_crashes,
           afl->saved_hangs, afl->total_tmouts, afl->last_find_time / 1000,
           afl->last_crash_time / 1000, afl->last_hang_time / 1000,
           afl->fsrv.total_execs - afl->last_crash_execs, afl->fsrv.exec_tmout,
@@ -481,7 +487,12 @@ void write_stats_file(afl_state_t *afl, u32 t_bytes, double bitmap_cvg,
            afl->crash_mode || afl->persistent_mode || afl->deferred_mode)
               ? ""
               : "default",
-          afl->orig_cmdline);
+          afl->orig_cmdline,
+          //Tesseract Modified Start
+          afl->argvs_mode ? afl->current_argv:afl->orig_cmdline
+          // "hihi"
+          //Tesseract Modified End
+          );
 
   if (afl->san_binary_length) {
 
@@ -709,7 +720,6 @@ void show_stats(afl_state_t *afl) {
 }
 
 void show_stats_normal(afl_state_t *afl) {
-
   double t_byte_ratio, stab_ratio;
 
   u64 cur_ms;
@@ -810,10 +820,23 @@ void show_stats_normal(afl_state_t *afl) {
   t_bytes = count_non_255_bytes(afl, afl->virgin_bits);
   t_byte_ratio = ((double)t_bytes * 100) / afl->fsrv.real_map_size;
 
-  if (unlikely(t_bytes > afl->fsrv.real_map_size)) {
+  if (unlikely(t_bytes >= afl->fsrv.real_map_size)) {
 
     if (unlikely(!afl->afl_env.afl_ignore_problems)) {
-
+      // 打印virgin_bits
+      for (u32 i = 0; i < afl->fsrv.map_size; i++) {
+          if (i % 16 == 0) printf("\n%04x: ", i);
+          printf("%02x ", afl->virgin_bits[i]);
+      }
+      printf("fsrv trace bits:\n");
+      for (u32 i = 0; i < afl->fsrv.map_size; i++) {
+          if (i % 16 == 0) printf("\n%04x: ", i);
+          printf("%d", afl->fsrv.trace_bits[i]==afl->first_trace[i]);
+      }
+      for (u32 i = 0; i < afl->fsrv.map_size; i++) {
+          if (i % 16 == 0) printf("\n%04x: ", i);
+          printf("%02x", afl->var_bytes[i]);
+      }
       FATAL(
           "Incorrect fuzzing setup detected. Your target seems to have loaded "
           "incorrectly instrumented shared libraries (%u of %u/%u). If you use "

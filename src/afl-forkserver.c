@@ -201,8 +201,76 @@ void afl_nyx_runner_kill(afl_forkserver_t *fsrv) {
 
 static list_t fsrv_list = {.element_prealloc_count = 0};
 
-static void fsrv_exec_child(afl_forkserver_t *fsrv, char **argv) {
+//Tesseract Modified Start
+char **read_argvs_file(const char *path, int *argc_out) {
+    FILE *fp = fopen(path, "rb");
+    if (!fp) {
+        perror("fopen");
+        return NULL;
+    }
 
+    char **argv = NULL;
+    int argc = 0;
+
+    // 读取整个文件到内存
+    fseek(fp, 0, SEEK_END);
+    long size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    u8 *buf = malloc(size);
+    fread(buf, 1, size, fp);
+    fclose(fp);
+
+    // 遍历 buffer，按 '\0' 分割
+    u8 *p = buf;
+    u8 *end = buf + size;
+
+    while (p < end) {
+        size_t len = strlen((char *)p);
+
+        // 防止文件末尾意外损坏
+        if (len == 0) {
+            p++;
+            continue;
+        }
+
+        argv = realloc(argv, sizeof(char *) * (argc + 1));
+        argv[argc] = strdup((char *)p);
+        argc++;
+
+        // 跳到下一个字符串（跳过 '\0'）
+        p += len + 1;
+    }
+
+    // 最后加 NULL
+    argv = realloc(argv, sizeof(char *) * (argc + 1));
+    argv[argc] = NULL;
+
+    if (argc_out)
+        *argc_out = argc;
+
+    free(buf);
+    return argv;
+}
+
+//Tesseract Modified End
+
+static void fsrv_exec_child(afl_forkserver_t *fsrv, char **argv) {
+  // //Tesseract Modified Start
+  // if(fsrv->argvs_file!=NULL){
+  //   // if (argv) {
+  //     char *argv_0=argv[0];
+  //     int i = 1;
+  //     while (argv[i] != NULL) {
+  //         free(argv[i]);
+  //         i++;
+  //     }
+  //     free(argv);
+  //   // }
+  //   argv=read_argvs_file(fsrv->argvs_file,NULL);
+  //   argv[0]=argv_0;
+  // }
+  // //Tesseract Modified End
   if (fsrv->qemu_mode || fsrv->cs_mode) {
 
     setenv("AFL_DISABLE_LLVM_INSTRUMENTATION", "1", 0);
@@ -254,6 +322,17 @@ static void fsrv_exec_child(afl_forkserver_t *fsrv, char **argv) {
   }
 
   execv(fsrv->target_path, argv);
+  // //Tesseract Modified Start
+  // u8 trace_count=0;
+  // // 遍历整个 trace_bits 数组，打印非零的部分
+  // for (int i = 0; i < fsrv->map_size; i++) {
+  //     if (fsrv->trace_bits[i] != 0) {
+  //         trace_count++;
+  //     }
+  // }
+  // printf("child trace_count: %d\n", trace_count);
+  // printf("child total_exec:%lu\n",fsrv->total_execs);
+  // //Tesseract Modified End
 
   WARNF("Execv failed in forkserver: %s.", strerror(errno));
 
@@ -475,7 +554,21 @@ restart_poll:
   It execvs for each fork, forwarding exit codes and child pids to afl. */
 
 static void afl_fauxsrv_execv(afl_forkserver_t *fsrv, char **argv) {
-
+  // //Tesseract Modified Start
+  // if(fsrv->argvs_file!=NULL){
+  //   // if (argv) {
+  //     char *argv_0=argv[0];
+  //     int i = 1;
+  //     while (argv[i] != NULL) {
+  //         free(argv[i]);
+  //         i++;
+  //     }
+  //     free(argv);
+  //   // }
+  //   argv=read_argvs_file(fsrv->argvs_file,NULL);
+  //   argv[0]=argv_0;
+  // }
+  // //Tesseract Modified End
   unsigned char tmp[4] = {0, 0, 0, 0};
   pid_t         child_pid;
 
@@ -557,6 +650,18 @@ static void afl_fauxsrv_execv(afl_forkserver_t *fsrv, char **argv) {
 
       // finally: exec...
       execv(fsrv->target_path, argv);
+
+      // //Tesseract Modified Start
+      // u8 trace_count=0;
+      // // 遍历整个 trace_bits 数组，打印非零的部分
+      // for (int i = 0; i < fsrv->map_size; i++) {
+      //     if (fsrv->trace_bits[i] != 0) {
+      //         trace_count++;
+      //     }
+      // }
+      // printf("fauxsrv trace_count: %d\n", trace_count);
+      // printf("fauxsrv total_exec:%lu\n",fsrv->total_execs);
+      // //Tesseract Modified End
 
       /* Use a distinctive bitmap signature to tell the parent about execv()
         falling through. */
@@ -2059,6 +2164,18 @@ fsrv_run_result_t __attribute__((hot)) afl_fsrv_run_target(
 
   }
 
+  // Tesseract Modified Start
+  // u8 trace_count=0;
+  // // 遍历整个 trace_bits 数组，打印非零的部分
+  // for (int i = 0; i < fsrv->map_size; i++) {
+  //     if (fsrv->trace_bits[i] != 0) {
+  //         trace_count++;
+  //     }
+  // }
+  // printf("trace_count: %d\n", trace_count);
+  // printf("total_exec:%lu\n",fsrv->total_execs);
+  // Tesseract Modified End
+
   /* we have the fork server (or faux server) up and running
   First, tell it if the previous run timed out. */
 
@@ -2171,7 +2288,17 @@ fsrv_run_result_t __attribute__((hot)) afl_fsrv_run_target(
   if (!WIFSTOPPED(fsrv->child_status)) { fsrv->child_pid = -1; }
 
   fsrv->total_execs++;
-
+  // Tesseract Modified Start
+  // trace_count=0;
+  // // 遍历整个 trace_bits 数组，打印非零的部分
+  // for (int i = 0; i < fsrv->map_size; i++) {
+  //     if (fsrv->trace_bits[i] != 0) {
+  //         trace_count++;
+  //     }
+  // }
+  // printf("trace_count: %d\n", trace_count);
+  // printf("total_exec:%lu\n",fsrv->total_execs);
+  // Tesseract Modified End
   /* Any subsequent operations on fsrv->trace_bits must not be moved by the
      compiler below this point. Past this location, fsrv->trace_bits[]
      behave very normally and do not have to be treated as volatile. */

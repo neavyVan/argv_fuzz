@@ -741,6 +741,14 @@ void add_to_queue(afl_state_t *afl, u8 *fname, u32 len, u8 passed_det) {
   }
 
   afl->last_find_time = cur_time;
+  // Tesseract Modified Start
+  // 如果有新的路径发现，我们不加时（因为可能会存在初始探索路径new很多的情况，因此我们只重置超时时间）
+  if (afl->argvs_mode!=0){
+    afl->current_argv_timeout = (afl->current_argv_timeout > get_cur_time() + 1000 * 60 * 10)
+          ? afl->current_argv_timeout
+          : get_cur_time() + 1000 * 60 * 10;
+  }
+  // Tesseract Modified End
 
   if (afl->custom_mutators_count) {
 

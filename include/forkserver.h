@@ -243,8 +243,14 @@ typedef struct afl_forkserver {
   u8   *custom_input;
   u32   custom_input_len;
   void (*late_send)(void *, const u8 *, size_t);
-
+  //Tesseract Modified Start
+  char *argvs_file;                                            /* argv if needed */
+  //Tesseract Modified End
 } afl_forkserver_t;
+
+//Tesseract Modified Start
+char **read_argvs_file(const char *path, int *argc_out);
+//Tesseract Modified End
 
 typedef enum fsrv_run_result {
 

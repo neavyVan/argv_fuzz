@@ -500,6 +500,17 @@ struct foreign_sync {
 
 };
 
+// Tesseract Modified Start
+typedef struct{
+    char **argv;
+    int    argc;
+    u8     has_fuzzed;
+    double score;
+    double weight;
+    double prefix_weight;
+}CmdNode;
+// Tesseract Modified End
+
 typedef struct afl_state {
 
   /* Position of this state in the global states list */
@@ -899,6 +910,18 @@ typedef struct afl_state {
   dynamic_shared_access_t
       *ijon_shared_access;         /* IJON shared access for dynamic offset */
 
+  // Tesseract Modified Start
+  u8              argvs_mode;      /* 是否开启使用多程序选项模式 */
+  u8             *argvs_path;     /* 程序选项存储文件，应该是一个文件，每行为一个cmd */
+  u8             *current_argv;     /* 当前正在fuzz的程序选项 */
+  u64             current_argv_start_fuzztime;// 记录当前argv的开始fuzz时间
+  u64             current_argv_timeout;// 动态调整当前argv的总fuzz时间，到时就切换
+  CmdNode        *argvs_cmdNodes;     /* 程序选项链表 */
+  int             current_cmdNum;
+  double          argvs_total_weight;     /* 程序选项选择的概率 */
+  int             argvs_cmdNum;     /* 程序选项数量 */
+  int             init_seed_count;     /* 初始化种子数量 */
+  // Tesseract Modified End
 } afl_state_t;
 
 struct custom_mutator {
@@ -1300,6 +1323,13 @@ u8   pilot_fuzzing(afl_state_t *);
 u8   core_fuzzing(afl_state_t *);
 void pso_updating(afl_state_t *);
 u8   fuzz_one(afl_state_t *);
+
+// Tesseract Modified Start
+void argvs_fuzz_init(afl_state_t *afl);
+void get_random_argvs(afl_state_t *afl);
+void tesseract_save_cmdline(afl_state_t *afl);
+void write_argvs_file(afl_state_t *afl);
+// Tesseract Modified End
 
 /* Init */
 

@@ -524,6 +524,46 @@ bool ModuleSanitizerCoverageAFL::instrumentModule(
   Int1Ty = IRB.getInt1Ty();
 
   LLVMContext &Ctx = M.getContext();
+
+  // // Tesseract Modified Start
+  // PointerType * Int8PtrPtrTy = PointerType::get(Int8PtrTy, 0);
+  // PointerType * Int8PtrPtrPtrTy = PointerType::get(Int8PtrPtrTy, 0);
+
+  // FunctionCallee argvHook = M.getOrInsertFunction("__afl_parse_argv", VoidTy, Int32PtrTy, Int8PtrPtrPtrTy);
+
+  // for (auto &F : M) {
+  //   if (F.getName()==StringRef("main")) {
+  //     BasicBlock & entryblock = F.getEntryBlock();
+  //     IRBuilder<> IRB(&(*entryblock.begin()));
+  //     // Sometimes, the number of arguments may be less than 2 in the configure process
+  //     if (F.arg_size() == 2) {
+  //       Value * argc = F.getArg(0);
+  //       Value * argv = F.getArg(1);
+  //       AllocaInst * argc_ptr = IRB.CreateAlloca(Int32Ty);
+  //       AllocaInst * argv_ptr = IRB.CreateAlloca(Int8PtrPtrTy);
+
+  //       std::vector<Value *> args;
+  //       args.push_back(argc_ptr);
+  //       args.push_back(argv_ptr);
+
+  //       CallInst * argv_call = IRB.CreateCall(argvHook, args);
+  //       Value * new_argc = IRB.CreateLoad(IRB.getInt32Ty(),argc_ptr,"argc_load");
+  //       Value * new_argv = IRB.CreateLoad(IRB.getInt8Ty()->getPointerTo(),argc_ptr,"argc_load");
+
+  //       argc->replaceAllUsesWith(new_argc);
+  //       argv->replaceAllUsesWith(new_argv);
+
+  //       IRB.SetInsertPoint(argv_call);
+
+  //       IRB.CreateStore(argc, argc_ptr);
+  //       IRB.CreateStore(argv, argv_ptr);
+  //     } else {
+  //       errs() << "Not enough arguments for Function: " << F.getName() << "\n";
+  //     }
+  //   }
+  // }
+  // // Tesseract Modified End
+
   AFLMapPtr = new GlobalVariable(M, PtrTy, false, GlobalValue::ExternalLinkage,
                                  0, "__afl_area_ptr");
   AFLCovMapSize = new GlobalVariable(

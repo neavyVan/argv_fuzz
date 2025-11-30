@@ -566,7 +566,6 @@ int main(int argc, char **argv_orig, char **envp) {
   struct timezone tz;
 
   doc_path = access(DOC_PATH, F_OK) != 0 ? (u8 *)"docs" : (u8 *)DOC_PATH;
-
   if (argc > 1 && strcmp(argv_orig[1], "--version") == 0) {
 
     printf("afl-fuzz" VERSION "\n");
@@ -604,7 +603,6 @@ int main(int argc, char **argv_orig, char **envp) {
   #endif
 
   char **argv = argv_cpy_dup(argc, argv_orig);
-
   afl_state_t *afl = calloc(1, sizeof(afl_state_t));
   if (!afl) { FATAL("Could not create afl state"); }
 
@@ -663,20 +661,31 @@ int main(int argc, char **argv_orig, char **envp) {
 
   SAYF(cCYA "afl-fuzz" VERSION cRST
             " based on afl by Michal Zalewski and a large online community\n");
-
   gettimeofday(&tv, &tz);
   rand_set_seed(afl, tv.tv_sec ^ tv.tv_usec ^ getpid());
 
   afl->shmem_testcase_mode = 1;  // we always try to perform shmem fuzzing
 
   // still available: HjJkKqrv
+  // Tesseract Modified Start
   while (
       (opt = getopt(argc, argv,
-                    "+a:Ab:B:c:CdDe:E:f:F:g:G:hi:I:l:L:m:M:nNo:Op:P:QRs:S:t:T:"
+                    "+a:Ab:B:c:CdDe:E:f:F:g:G:hi:I:K:l:L:m:M:nNo:Op:P:QRs:S:t:T:"
                     "uUV:w:WXx:YzZ")) > 0) {
-
+  // Tesseract Modified End
     switch (opt) {
+      // Tesseract Modified Start
+      case 'K':
+          if (afl->argvs_mode){ FATAL("Multiple -K options are not supported");}
 
+          if (access(optarg, F_OK) != 0){ FATAL("The -K option requires a valid path to a valid "
+                    "dictionary file");}
+          
+          afl->argvs_mode = 1;
+          afl->argvs_path = optarg;
+          
+          break;
+      // Tesseract Modified End
       case 'a':
 
         if (!stricmp(optarg, "text") || !stricmp(optarg, "ascii") ||
@@ -2108,7 +2117,8 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
-  save_cmdline(afl, argc, argv);
+  save_cmdline(afl, argc, argv); //改变了afl->orig_cmdline
+
   check_if_tty(afl);
   if (afl->afl_env.afl_force_ui) { afl->not_on_tty = 0; }
 
@@ -2168,6 +2178,8 @@ int main(int argc, char **argv_orig, char **envp) {
   for (counter = 0; counter < 100000; counter++)
     printf("DEBUG: rand %06d is %u\n", counter, rand_below(afl, 65536));
   #endif
+
+
 
   if (!getenv("AFL_CUSTOM_INFO_PROGRAM")) {
 
@@ -2306,7 +2318,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
-  setup_cmdline_file(afl, argv + optind);
+  setup_cmdline_file(afl, argv + optind); // 把待测参数写到了cmdline文件夹里
 
   // Let's check SAND sanitizers binaries a bit earlier
   // so that we won't overwrite target_path.
@@ -2494,7 +2506,11 @@ int main(int argc, char **argv_orig, char **envp) {
           afl->fsrv.out_file = alloc_printf("%s/.cur_input", afl->tmp_dir);
 
         }
-
+        //Tesseract Modified Start
+        afl->fsrv.argvs_file = alloc_printf("%s/.argvs", afl->tmp_dir);
+        // afl->fsrv.argvs_file=NULL;
+        // write_argvs_file(afl);
+        //Tesseract Modified End
         detect_file_args(argv + optind + 1, afl->fsrv.out_file,
                          &afl->fsrv.use_stdin);
         break;
@@ -2575,7 +2591,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
-  afl->argv = use_argv;
+  afl->argv = use_argv; //保留基础的
 
   afl->fsrv.trace_bits =
       afl_shm_init(&afl->shm, afl->fsrv.map_size, afl->non_instrumented_mode,
@@ -3165,7 +3181,10 @@ int main(int argc, char **argv_orig, char **envp) {
     }
 
   }
-
+  
+  // Tesseract Modified Start
+  argvs_fuzz_init(afl);
+  // Tesseract Modified End
   show_init_stats(afl);
 
   if (!getenv("AFL_NO_UI") && !afl->not_on_tty) { make_space_for_stats(); }
@@ -3221,10 +3240,42 @@ int main(int argc, char **argv_orig, char **envp) {
   afl->start_time = get_cur_time();
   u8 very_first_run = 1;
 
+  // 这是fuzz主循环，我要在这里检测并且切换逻辑
+  // if(afl->argvs_mode){
+  //   afl->fsrv.argvs_file = alloc_printf("%s/.argvs", afl->tmp_dir);
+  // }
   while (likely(!afl->stop_soon)) {
-
+    //就在这附件进行监控和切换(这里是以cycle内的一次fuzz为单位的监控策略)
+    // Tesseract Modified Start
+    if (afl->argvs_mode){
+      //检查当前种子的状态,我们在新路径上重置了超时时间为10分钟，在新crash上增加了超时时间为30分钟
+      //超时切换命令行参数
+      if (get_cur_time() > afl->current_argv_timeout ){
+        get_random_argvs(afl);
+        afl->current_argv_timeout = get_cur_time() + 10 * 60 * 1000;
+        afl->current_argv_start_fuzztime = get_cur_time();
+        u8    fn_tesseract[PATH_MAX];
+        FILE *f_tesseract;
+        snprintf(fn_tesseract, PATH_MAX, "%s/tesseract_stats", afl->out_dir);
+        f_tesseract = fopen(fn_tesseract, "a");
+        fprintf(f_tesseract,
+          "current_cmdNum: %d\n"
+          "current_argv_start_fuzztime: %llu\n"
+          "current_argv: %s\n"
+          "total exevs: %llu\n",
+          afl->current_cmdNum,
+          afl->current_argv_start_fuzztime/1000,
+          afl->current_argv,
+          afl->fsrv.total_execs);
+        fclose(f_tesseract);
+        afl->score_changed = 1;
+      }
+    }
+    // Tesseract Modified End
+    // 对队列进行筛选和裁剪，标记哪些种子是有效的、favored 或者要跳过
     cull_queue(afl);
 
+    // 判断是否完成一次 queue cycle 或者老种子模式下队列到末尾
     if (unlikely((!afl->old_seed_selection &&
                   runs_in_current_cycle > afl->queued_items) ||
                  (afl->old_seed_selection && !afl->queue_cur))) {
@@ -3388,6 +3439,7 @@ int main(int argc, char **argv_orig, char **envp) {
       }
 
   #endif
+      //就在这附件进行监控和切换(这里是以cycle为单位的监控策略)
 
       if (afl->cycle_schedules) {
 
@@ -3436,6 +3488,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
     ++runs_in_current_cycle;
 
+    // 内层循环，对队列中一个测试用例的一次fuzz
     do {
 
       if (likely(!afl->old_seed_selection)) {
@@ -3872,6 +3925,10 @@ stop_fuzzing:
   ck_free(afl->fsrv.out_file);
   ck_free(afl->sync_id);
   if (afl->q_testcase_cache) { ck_free(afl->q_testcase_cache); }
+  if (afl->argvs_mode) { 
+    ck_free(afl->argvs_path);
+    ck_free(afl->argvs_cmdNodes);
+  }
   afl_state_deinit(afl);
   free(afl);                                                 /* not tracked */
 
